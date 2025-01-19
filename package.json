@@ -2,7 +2,7 @@
 	"name": "open-remote-ssh",
 	"displayName": "Open Remote - SSH",
 	"description": "Use any remote machine with a SSH server as your development environment.",
-	"version": "0.0.48",
+	"version": "0.0.50",
 	"publisher": "jeanp413",
 	"repository": {
 		"type": "git",
@@ -76,9 +76,9 @@
 				},
 				"remote.SSH.serverDownloadUrlTemplate": {
 					"type": "string",
-					"description": "The URL from where the vscode server will be downloaded. You can use the following variables and they will be replaced dynamically:\n- ${quality}: vscode server quality, e.g. stable or insiders\n- ${version}: vscode server version, e.g. 1.69.0\n- ${commit}: vscode server release commit\n- ${arch}: vscode server arch, e.g. x64, armhf, arm64\n- ${release}: release number, vscodium only https://github.com/VSCodium/vscodium/pull/1192",
+					"description": "The URL from where the vscode server will be downloaded. You can use the following variables and they will be replaced dynamically:\n- ${quality}: vscode server quality, e.g. stable or insiders\n- ${version}: vscode server version, e.g. 1.69.0\n- ${commit}: vscode server release commit\n- ${arch}: vscode server arch, e.g. x64, armhf, arm64\n- ${os}: operating system, e.g. linux, darwin",
 					"scope": "application",
-					"default": "https://github.com/VSCodium/vscodium/releases/download/${version}.${release}/vscodium-reh-${os}-${arch}-${version}.${release}.tar.gz"
+					"default": "https://github.com/codestoryai/binaries/releases/download/${version}.25017/aide-reh-${os}-${arch}-${version}.25017.tar.gz"
 				},
 				"remote.SSH.remotePlatform": {
 					"type": "object",
@@ -356,15 +356,15 @@
 		"eslint": "^8.13.0",
 		"eslint-plugin-jsdoc": "^19.1.0",
 		"ts-loader": "^9.2.7",
-		"typescript": "^4.6.3",
+		"typescript": "^4.9.5",
 		"webpack": "^5.42.0",
 		"webpack-cli": "^4.7.2"
 	},
 	"dependencies": {
+		"@jeanp413/ssh-config": "^4.3.1",
 		"glob": "^9.3.1",
 		"simple-socks": "git+https://github.com/jeanp413/simple-socks#main",
 		"socks": "^2.5.0",
-		"@jeanp413/ssh-config": "^4.3.1",
 		"ssh2": "git+https://github.com/jeanp413/ssh2#master"
 	}
 }

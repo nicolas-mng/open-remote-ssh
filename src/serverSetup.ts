@@ -1,4 +1,4 @@
-import * as crypto from 'crypto';
+import * as nodeCrypto from 'node:crypto';
 import Log from './common/logger';
 import { getVSCodeServerConfig } from './serverConfig';
 import SSHConnection from './ssh/sshConnection';
@@ -6,9 +6,8 @@ import SSHConnection from './ssh/sshConnection';
 export interface ServerInstallOptions {
     id: string;
     quality: string;
-    commit: string;
     version: string;
-    release?: string; // vscodium specific
+    release: string;
     extensionIds: string[];
     envVariables: string[];
     useSocketPath: boolean;
@@ -34,8 +33,6 @@ export class ServerInstallError extends Error {
         super(message);
     }
 }
-
-const DEFAULT_DOWNLOAD_URL_TEMPLATE = 'https://github.com/VSCodium/vscodium/releases/download/${version}.${release}/vscodium-reh-${os}-${arch}-${version}.${release}.tar.gz';
 
 export async function installCodeServer(conn: SSHConnection, serverDownloadUrlTemplate: string | undefined, extensionIds: string[], envVariables: string[], platform: string | undefined, useSocketPath: boolean, logger: Log): Promise<ServerInstallResult> {
     let shell = 'powershell';
@@ -67,13 +64,13 @@ export async function installCodeServer(conn: SSHConnection, serverDownloadUrlTe
         }
     }
 
-    const scriptId = crypto.randomBytes(12).toString('hex');
+    const scriptId = nodeCrypto.randomBytes(12).toString('hex');
 
     const vscodeServerConfig = await getVSCodeServerConfig();
+    const DEFAULT_DOWNLOAD_URL_TEMPLATE = `https://github.com/codestoryai/binaries/releases/download/${vscodeServerConfig.version}.25017/aide-reh-\${os}-\${arch}-${vscodeServerConfig.version}.25017.tar.gz`;
     const installOptions: ServerInstallOptions = {
         id: scriptId,
         version: vscodeServerConfig.version,
-        commit: vscodeServerConfig.commit,
         quality: vscodeServerConfig.quality,
         release: vscodeServerConfig.release,
         extensionIds,
@@ -81,7 +78,7 @@ export async function installCodeServer(conn: SSHConnection, serverDownloadUrlTe
         useSocketPath,
         serverApplicationName: vscodeServerConfig.serverApplicationName,
         serverDataFolderName: vscodeServerConfig.serverDataFolderName,
-        serverDownloadUrlTemplate: serverDownloadUrlTemplate ?? vscodeServerConfig.serverDownloadUrlTemplate ?? DEFAULT_DOWNLOAD_URL_TEMPLATE,
+        serverDownloadUrlTemplate: serverDownloadUrlTemplate || DEFAULT_DOWNLOAD_URL_TEMPLATE,
     };
 
     let commandOutput: { stdout: string; stderr: string };
@@ -91,7 +88,7 @@ export async function installCodeServer(conn: SSHConnection, serverDownloadUrlTe
         logger.trace('Server install command:', installServerScript);
 
         const installDir = `$HOME\\${vscodeServerConfig.serverDataFolderName}\\install`;
-        const installScript = `${installDir}\\${vscodeServerConfig.commit}.ps1`;
+        const installScript = `${installDir}\\${vscodeServerConfig.release}.ps1`;
         const endRegex = new RegExp(`${scriptId}: end`);
         // investigate if it's possible to use `-EncodedCommand` flag
         // https://devblogs.microsoft.com/powershell/invoking-powershell-with-complex-expressions-using-scriptblocks/
@@ -198,7 +195,7 @@ function parseServerInstallOutput(str: string, scriptId: string): { [k: string]:
     return resultMap;
 }
 
-function generateBashInstallScript({ id, quality, version, commit, release, extensionIds, envVariables, useSocketPath, serverApplicationName, serverDataFolderName, serverDownloadUrlTemplate }: ServerInstallOptions) {
+function generateBashInstallScript({ id, quality, version, release, extensionIds, envVariables, useSocketPath, serverApplicationName, serverDataFolderName, serverDownloadUrlTemplate }: ServerInstallOptions) {
     const extensions = extensionIds.map(id => '--install-extension ' + id).join(' ');
     return `
 # Server installation script
@@ -206,19 +203,18 @@ function generateBashInstallScript({ id, quality, version, commit, release, exte
 TMP_DIR="\${XDG_RUNTIME_DIR:-"/tmp"}"
 
 DISTRO_VERSION="${version}"
-DISTRO_COMMIT="${commit}"
 DISTRO_QUALITY="${quality}"
-DISTRO_VSCODIUM_RELEASE="${release ?? ''}"
+DISTRO_RELEASE="${release}"
 
 SERVER_APP_NAME="${serverApplicationName}"
 SERVER_INITIAL_EXTENSIONS="${extensions}"
-SERVER_LISTEN_FLAG="${useSocketPath ? `--socket-path="$TMP_DIR/vscode-server-sock-${crypto.randomUUID()}"` : '--port=0'}"
+SERVER_LISTEN_FLAG="${useSocketPath ? `--socket-path="$TMP_DIR/vscode-server-sock-${nodeCrypto.randomUUID()}"` : '--port=0'}"
 SERVER_DATA_DIR="$HOME/${serverDataFolderName}"
-SERVER_DIR="$SERVER_DATA_DIR/bin/$DISTRO_COMMIT"
+SERVER_DIR="$SERVER_DATA_DIR/bin/$DISTRO_RELEASE"
 SERVER_SCRIPT="$SERVER_DIR/bin/$SERVER_APP_NAME"
-SERVER_LOGFILE="$SERVER_DATA_DIR/.$DISTRO_COMMIT.log"
-SERVER_PIDFILE="$SERVER_DATA_DIR/.$DISTRO_COMMIT.pid"
-SERVER_TOKENFILE="$SERVER_DATA_DIR/.$DISTRO_COMMIT.token"
+SERVER_LOGFILE="$SERVER_DATA_DIR/.$DISTRO_RELEASE.log"
+SERVER_PIDFILE="$SERVER_DATA_DIR/.$DISTRO_RELEASE.pid"
+SERVER_TOKENFILE="$SERVER_DATA_DIR/.$DISTRO_RELEASE.token"
 SERVER_ARCH=
 SERVER_CONNECTION_TOKEN=
 SERVER_DOWNLOAD_URL=
@@ -318,7 +314,7 @@ if [[ $OS_RELEASE_ID = alpine ]]; then
     PLATFORM=$OS_RELEASE_ID
 fi
 
-SERVER_DOWNLOAD_URL="$(echo "${serverDownloadUrlTemplate.replace(/\$\{/g, '\\${')}" | sed "s/\\\${quality}/$DISTRO_QUALITY/g" | sed "s/\\\${version}/$DISTRO_VERSION/g" | sed "s/\\\${commit}/$DISTRO_COMMIT/g" | sed "s/\\\${os}/$PLATFORM/g" | sed "s/\\\${arch}/$SERVER_ARCH/g" | sed "s/\\\${release}/$DISTRO_VSCODIUM_RELEASE/g")"
+SERVER_DOWNLOAD_URL="$(echo "${serverDownloadUrlTemplate.replace(/\$\{/g, '\\${')}" | sed "s/\\\${version}/$DISTRO_VERSION/g" | sed "s/\\\${release}/$DISTRO_VSCODIUM_RELEASE/g" | sed "s/\\\${os}/$PLATFORM/g" | sed "s/\\\${arch}/$SERVER_ARCH/g")"
 
 # Check if server script is already installed
 if [[ ! -f $SERVER_SCRIPT ]]; then
@@ -383,7 +379,7 @@ if [[ -z $SERVER_RUNNING_PROCESS ]]; then
 
     touch $SERVER_TOKENFILE
     chmod 600 $SERVER_TOKENFILE
-    SERVER_CONNECTION_TOKEN="${crypto.randomUUID()}"
+    SERVER_CONNECTION_TOKEN="${nodeCrypto.randomUUID()}"
     echo $SERVER_CONNECTION_TOKEN > $SERVER_TOKENFILE
 
     $SERVER_SCRIPT --start-server --host=127.0.0.1 $SERVER_LISTEN_FLAG $SERVER_INITIAL_EXTENSIONS --connection-token-file $SERVER_TOKENFILE --telemetry-level off --enable-remote-auto-shutdown --accept-server-license-terms &> $SERVER_LOGFILE &
@@ -422,36 +418,36 @@ print_install_results_and_exit 0
 `;
 }
 
-function generatePowerShellInstallScript({ id, quality, version, commit, release, extensionIds, envVariables, useSocketPath, serverApplicationName, serverDataFolderName, serverDownloadUrlTemplate }: ServerInstallOptions) {
+function generatePowerShellInstallScript({ id, quality, version, release, extensionIds, envVariables, useSocketPath, serverApplicationName, serverDataFolderName, serverDownloadUrlTemplate }: ServerInstallOptions) {
     const extensions = extensionIds.map(id => '--install-extension ' + id).join(' ');
     const downloadUrl = serverDownloadUrlTemplate
-        .replace(/\$\{quality\}/g, quality)
         .replace(/\$\{version\}/g, version)
-        .replace(/\$\{commit\}/g, commit)
+        .replace(/\$\{release\}/g, release || '')
+
         .replace(/\$\{os\}/g, 'win32')
-        .replace(/\$\{arch\}/g, 'x64')
-        .replace(/\$\{release\}/g, release ?? '');
+        .replace(/\$\{arch\}/g, 'x64');
 
     return `
+
 # Server installation script
 
 $TMP_DIR="$env:TEMP\\$([System.IO.Path]::GetRandomFileName())"
 $ProgressPreference = "SilentlyContinue"
 
 $DISTRO_VERSION="${version}"
-$DISTRO_COMMIT="${commit}"
 $DISTRO_QUALITY="${quality}"
-$DISTRO_VSCODIUM_RELEASE="${release ?? ''}"
+$DISTRO_RELEASE="${release}"
 
 $SERVER_APP_NAME="${serverApplicationName}"
 $SERVER_INITIAL_EXTENSIONS="${extensions}"
-$SERVER_LISTEN_FLAG="${useSocketPath ? `--socket-path="$TMP_DIR/vscode-server-sock-${crypto.randomUUID()}"` : '--port=0'}"
+$SERVER_LISTEN_FLAG="${useSocketPath ? `--socket-path="$TMP_DIR/vscode-server-sock-${nodeCrypto.randomUUID()}"` : '--port=0'}"
 $SERVER_DATA_DIR="$(Resolve-Path ~)\\${serverDataFolderName}"
-$SERVER_DIR="$SERVER_DATA_DIR\\bin\\$DISTRO_COMMIT"
+$SERVER_DIR="$SERVER_DATA_DIR\\bin\\$DISTRO_RELEASE"
 $SERVER_SCRIPT="$SERVER_DIR\\bin\\$SERVER_APP_NAME.cmd"
-$SERVER_LOGFILE="$SERVER_DATA_DIR\\.$DISTRO_COMMIT.log"
-$SERVER_PIDFILE="$SERVER_DATA_DIR\\.$DISTRO_COMMIT.pid"
-$SERVER_TOKENFILE="$SERVER_DATA_DIR\\.$DISTRO_COMMIT.token"
+$SERVER_LOGFILE="$SERVER_DATA_DIR\\.$DISTRO_RELEASE.log"
+$SERVER_PIDFILE="$SERVER_DATA_DIR\\.$DISTRO_RELEASE.pid"
+$SERVER_TOKENFILE="$SERVER_DATA_DIR\\.$DISTRO_RELEASE.token"
+
 $SERVER_ARCH=
 $SERVER_CONNECTION_TOKEN=
 $SERVER_DOWNLOAD_URL=
@@ -549,7 +545,7 @@ else {
         del $SERVER_TOKENFILE
     }
 
-    $SERVER_CONNECTION_TOKEN="${crypto.randomUUID()}"
+    $SERVER_CONNECTION_TOKEN="${nodeCrypto.randomUUID()}"
     [System.IO.File]::WriteAllLines($SERVER_TOKENFILE, $SERVER_CONNECTION_TOKEN)
 
     $SCRIPT_ARGUMENTS="--start-server --host=127.0.0.1 $SERVER_LISTEN_FLAG $SERVER_INITIAL_EXTENSIONS --connection-token-file $SERVER_TOKENFILE --telemetry-level off --enable-remote-auto-shutdown --accept-server-license-terms *> '$SERVER_LOGFILE'"

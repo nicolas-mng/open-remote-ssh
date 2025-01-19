@@ -14,12 +14,11 @@ async function getVSCodeProductJson() {
 
 export interface IServerConfig {
     version: string;
-    commit: string;
     quality: string;
-    release?: string; // vscodium-like specific
+    release: string;
     serverApplicationName: string;
     serverDataFolderName: string;
-    serverDownloadUrlTemplate?: string; // vscodium-like specific
+    serverDownloadUrlTemplate?: string;
 }
 
 export async function getVSCodeServerConfig(): Promise<IServerConfig> {
@@ -29,7 +28,6 @@ export async function getVSCodeServerConfig(): Promise<IServerConfig> {
 
     return {
         version: vscode.version.replace('-insider',''),
-        commit: productJson.commit,
         quality: productJson.quality,
         release: productJson.release,
         serverApplicationName: customServerBinaryName || productJson.serverApplicationName,
